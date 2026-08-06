@@ -47,35 +47,43 @@ func resolveAll(ctx context.Context, client *githubClient, refs []actionRef) (ma
 		unique[ref.Owner+"/"+ref.Repo] = ref
 	}
 
-	results := make(map[string]resolvedAction, len(unique))
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	errCh := make(chan error, len(unique))
-	sem := make(chan struct{}, 8)
+	type result struct {
+		key      string
+		resolved resolvedAction
+		err      error
+	}
 
-	for _, ref := range unique {
-		wg.Go(func() {
+	resultsCh := make(chan result, len(unique))
+	sem := make(chan struct{}, 8)
+	results := make(map[string]resolvedAction, len(unique))
+	var wg sync.WaitGroup
+
+	for key, ref := range unique {
+		wg.Add(1)
+		go func(key string, ref actionRef) {
+			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
 			resolved, err := client.resolveLatest(ctx, ref)
 			if err != nil {
-				errCh <- fmt.Errorf("resolve %s/%s: %w", ref.Owner, ref.Repo, err)
+				resultsCh <- result{err: fmt.Errorf("resolve %s/%s: %w", ref.Owner, ref.Repo, err)}
 				return
 			}
-
-			mu.Lock()
-			results[ref.Owner+"/"+ref.Repo] = resolved
-			mu.Unlock()
-		})
+			resultsCh <- result{key: key, resolved: resolved}
+		}(key, ref)
 	}
 
-	wg.Wait()
-	close(errCh)
-	for err := range errCh {
-		if err != nil {
-			return nil, err
+	go func() {
+		wg.Wait()
+		close(resultsCh)
+	}()
+
+	for result := range resultsCh {
+		if result.err != nil {
+			return nil, result.err
 		}
+		results[result.key] = result.resolved
 	}
 
 	return results, nil
