@@ -18,7 +18,13 @@ uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
 ## Installation
 
-You can build `twoup` from source using the Go toolchain:
+You can use `go install`:
+
+```bash
+go install github.com/aitorres/twoup/cmd/twoup@latest
+```
+
+You can also build `twoup` from source using the Go toolchain:
 
 ```bash
 go build -o twoup ./cmd/twoup
