@@ -7,51 +7,67 @@ import (
 
 var usesPattern = regexp.MustCompile(`^(\s*-?\s*uses\s*:\s*)(['\"]?)([^'\"\s#]+)(['\"]?)(\s*(#.*)?)$`)
 
+type parsedUsesLine struct {
+	prefix     string
+	openQuote  string
+	action     string
+	ref        string
+	closeQuote string
+}
+
 func parseUsesLine(line string) (actionRef, bool) {
-	match := usesPattern.FindStringSubmatch(line)
-	if match == nil {
-		return actionRef{}, false
-	}
-
-	full := strings.TrimSpace(match[3])
-	if strings.HasPrefix(full, "./") || strings.HasPrefix(full, "docker://") {
-		return actionRef{}, false
-	}
-
-	action, ref, ok := splitActionRef(full)
+	parsed, ok := parseUsesLineParts(line)
 	if !ok {
 		return actionRef{}, false
 	}
-
-	ownerRepo := strings.Split(action, "/")
-	if len(ownerRepo) != 2 {
+	owner, repo, ok := strings.Cut(parsed.action, "/")
+	if !ok {
 		return actionRef{}, false
 	}
-	return actionRef{Owner: ownerRepo[0], Repo: ownerRepo[1], Ref: ref}, true
+	return actionRef{Owner: owner, Repo: repo, Ref: parsed.ref}, true
 }
 
 func rewriteUsesLine(line string, resolved resolvedAction) (string, bool) {
-	match := usesPattern.FindStringSubmatch(line)
-	if match == nil {
-		return line, false
-	}
-
-	prefix := match[1]
-	openQuote := match[2]
-	full := strings.TrimSpace(match[3])
-	closeQuote := match[4]
-
-	action, _, ok := splitActionRef(full)
+	parsed, ok := parseUsesLineParts(line)
 	if !ok {
 		return line, false
 	}
 
-	rewritten := prefix + openQuote + action + "@" + resolved.Digest + closeQuote + " # " + resolved.LatestTag
+	rewritten := parsed.prefix + parsed.openQuote + parsed.action + "@" + resolved.Digest + parsed.closeQuote + " # " + resolved.LatestTag
 
 	if rewritten == line {
 		return line, false
 	}
 	return rewritten, true
+}
+
+func parseUsesLineParts(line string) (parsedUsesLine, bool) {
+	match := usesPattern.FindStringSubmatch(line)
+	if match == nil {
+		return parsedUsesLine{}, false
+	}
+
+	full := strings.TrimSpace(match[3])
+	if strings.HasPrefix(full, "./") || strings.HasPrefix(full, "docker://") {
+		return parsedUsesLine{}, false
+	}
+
+	action, ref, ok := splitActionRef(full)
+	if !ok {
+		return parsedUsesLine{}, false
+	}
+
+	if strings.Count(action, "/") != 1 {
+		return parsedUsesLine{}, false
+	}
+
+	return parsedUsesLine{
+		prefix:     match[1],
+		openQuote:  match[2],
+		action:     action,
+		ref:        ref,
+		closeQuote: match[4],
+	}, true
 }
 
 func splitActionRef(v string) (action string, ref string, ok bool) {

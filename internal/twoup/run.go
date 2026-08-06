@@ -20,19 +20,35 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 		return runStats{}, nil
 	}
 
+	type workflowFile struct {
+		path    string
+		content []byte
+		lines   []string
+		refs    map[int]actionRef
+	}
+
+	workflowFiles := make([]workflowFile, 0, len(files))
 	allRefs := make([]actionRef, 0, 32)
 	for _, file := range files {
 		content, err := os.ReadFile(file)
 		if err != nil {
 			return runStats{}, fmt.Errorf("read %s: %w", file, err)
 		}
-		for _, line := range strings.Split(string(content), "\n") {
+		lines := strings.Split(string(content), "\n")
+		refs := make(map[int]actionRef)
+		for i, line := range lines {
 			ref, ok := parseUsesLine(line)
-			if !ok {
-				continue
+			if ok {
+				refs[i] = ref
+				allRefs = append(allRefs, ref)
 			}
-			allRefs = append(allRefs, ref)
 		}
+		workflowFiles = append(workflowFiles, workflowFile{
+			path:    file,
+			content: content,
+			lines:   lines,
+			refs:    refs,
+		})
 	}
 
 	if len(allRefs) == 0 {
@@ -45,16 +61,10 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 	}
 
 	stats := runStats{}
-	for _, file := range files {
-		content, err := os.ReadFile(file)
-		if err != nil {
-			return runStats{}, fmt.Errorf("read %s: %w", file, err)
-		}
-
-		lines := strings.Split(string(content), "\n")
+	for _, file := range workflowFiles {
 		updatedInFile := 0
-		for i, line := range lines {
-			ref, ok := parseUsesLine(line)
+		for i, line := range file.lines {
+			ref, ok := file.refs[i]
 			if !ok {
 				continue
 			}
@@ -70,9 +80,9 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 				continue
 			}
 			if cfg.verbose {
-				fmt.Printf("%s: %s -> %s@%s # %s\n", file, ref.Owner+"/"+ref.Repo+"@"+ref.Ref, ref.Owner+"/"+ref.Repo, resolved.Digest, resolved.LatestTag)
+				fmt.Printf("%s: %s -> %s@%s # %s\n", file.path, ref.Owner+"/"+ref.Repo+"@"+ref.Ref, ref.Owner+"/"+ref.Repo, resolved.Digest, resolved.LatestTag)
 			}
-			lines[i] = updated
+			file.lines[i] = updated
 			updatedInFile++
 		}
 
@@ -81,12 +91,12 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 		}
 
 		if !cfg.dryRun {
-			updatedContent := strings.Join(lines, "\n")
-			if !strings.HasSuffix(updatedContent, "\n") && strings.HasSuffix(string(content), "\n") {
+			updatedContent := strings.Join(file.lines, "\n")
+			if !strings.HasSuffix(updatedContent, "\n") && strings.HasSuffix(string(file.content), "\n") {
 				updatedContent += "\n"
 			}
-			if err := os.WriteFile(file, []byte(updatedContent), 0o644); err != nil {
-				return runStats{}, fmt.Errorf("write %s: %w", file, err)
+			if err := os.WriteFile(file.path, []byte(updatedContent), 0o644); err != nil {
+				return runStats{}, fmt.Errorf("write %s: %w", file.path, err)
 			}
 		}
 
