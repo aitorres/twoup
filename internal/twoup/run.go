@@ -21,10 +21,10 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 	}
 
 	type workflowFile struct {
-		path    string
-		content []byte
-		lines   []string
-		refs    map[int]actionRef
+		path               string
+		hadTrailingNewline bool
+		lines              []string
+		refs               map[int]actionRef
 	}
 
 	workflowFiles := make([]workflowFile, 0, len(files))
@@ -44,10 +44,10 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 			}
 		}
 		workflowFiles = append(workflowFiles, workflowFile{
-			path:    file,
-			content: content,
-			lines:   lines,
-			refs:    refs,
+			path:               file,
+			hadTrailingNewline: strings.HasSuffix(string(content), "\n"),
+			lines:              lines,
+			refs:               refs,
 		})
 	}
 
@@ -92,7 +92,7 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 
 		if !cfg.dryRun {
 			updatedContent := strings.Join(file.lines, "\n")
-			if !strings.HasSuffix(updatedContent, "\n") && strings.HasSuffix(string(file.content), "\n") {
+			if !strings.HasSuffix(updatedContent, "\n") && file.hadTrailingNewline {
 				updatedContent += "\n"
 			}
 			if err := os.WriteFile(file.path, []byte(updatedContent), 0o644); err != nil {
