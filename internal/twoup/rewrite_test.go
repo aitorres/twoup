@@ -51,12 +51,3 @@ func TestRewriteUsesLine(t *testing.T) {
 		t.Fatalf("rewriteUsesLine()=%q want=%q", got, want)
 	}
 }
-
-func TestIsAlreadyPinned(t *testing.T) {
-	line := "- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
-	ref := actionRef{Owner: "actions", Repo: "checkout", Ref: "3d3c42e5aac5ba805825da76410c181273ba90b1"}
-	resolved := resolvedAction{LatestTag: "v7.0.1", Digest: "3d3c42e5aac5ba805825da76410c181273ba90b1"}
-	if !isAlreadyPinned(line, ref, resolved) {
-		t.Fatal("expected true for already-pinned line")
-	}
-}

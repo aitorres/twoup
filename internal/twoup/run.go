@@ -72,9 +72,6 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 			if !ok {
 				continue
 			}
-			if isAlreadyPinned(line, ref, resolved) {
-				continue
-			}
 			updated, changed := rewriteUsesLine(line, resolved)
 			if !changed {
 				continue
@@ -105,15 +102,4 @@ func runWithClient(cfg config, client *githubClient) (runStats, error) {
 	}
 
 	return stats, nil
-}
-
-func isAlreadyPinned(line string, ref actionRef, resolved resolvedAction) bool {
-	if !isDigest(ref.Ref) || ref.Ref != resolved.Digest {
-		return false
-	}
-	parts := strings.SplitN(line, "#", 2)
-	if len(parts) < 2 {
-		return false
-	}
-	return strings.TrimSpace(parts[1]) == resolved.LatestTag
 }
