@@ -72,6 +72,4 @@ Please make sure to update tests as appropriate; a minimum coverage of 80% is ex
 
 ## License
 
-No license file is currently included in this repository.
-
 This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/aitorres/twoup/blob/main/LICENSE).
